@@ -90,55 +90,75 @@ const ApiResponse = {
     }
 };
 
-// 路由处理
-app.get('*', async (req, res) => {
-    // 防止访问 assets 目录
-    if (req.path.startsWith(ASSETS_PATH)) {
-        return res.status(403).send(ApiResponse.error('禁止访问'));
-    }
-
+// 添加验证 token 的中间件
+const verifyAuthStatus = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
     try {
-        const requestPath = decodeURIComponent(req.path);
-        const fullPath = path.join(STATIC_DIR, requestPath);
-        
-        // 确保不能访问上级目录
-        const realPath = path.resolve(fullPath);
-        if (!realPath.startsWith(path.resolve(STATIC_DIR))) {
+        if (token) {
+            // 验证 token
+            jwt.verify(token, process.env.JWT_SECRET);
+            req.isAuthenticated = true;
+        } else {
+            req.isAuthenticated = false;
+        }
+    } catch (err) {
+        req.isAuthenticated = false;
+    }
+    next();
+};
+
+// 修改路由处理，使用验证中间件
+app.get('/*', verifyAuthStatus, async (req, res,next) => {
+    try {
+        const requestPath = req.path;
+        const normalizedPath = path.normalize(requestPath);
+        const absolutePath = path.join(STATIC_DIR, normalizedPath);
+        const parentPath = path.dirname(normalizedPath);
+
+        console.log(requestPath)
+        // 如果是 api 路径，跳过这个处理器
+        if (requestPath.startsWith('/api')) {
+            console.log(requestPath+"跳过")
+            return next();
+        }
+        // 防止访问 assets 目录
+        if (requestPath.startsWith(ASSETS_PATH)) {
             return res.status(403).send(ApiResponse.error('禁止访问'));
         }
 
         try {
-            await fsPromises.access(fullPath);
+            await fsPromises.access(absolutePath);
         } catch (err) {
             return res.status(404).send(ApiResponse.error('路径不存在'));
         }
 
-        const stats = await fsPromises.stat(fullPath);
+        const stats = await fsPromises.stat(absolutePath);
 
         if (stats.isFile()) {
-            return res.download(fullPath);
+            return res.download(absolutePath);
         }
 
-        const files = await fsPromises.readdir(fullPath);
+        const files = await fsPromises.readdir(absolutePath);
         const fileList = await Promise.all(files.map(async file => {
-            const filePath = path.join(fullPath, file);
+            const filePath = path.join(absolutePath, file);
             const stat = await fsPromises.stat(filePath);
             return {
                 name: file,
                 isDirectory: stat.isDirectory(),
                 icon: stat.isDirectory() ? 'fas fa-folder' : getFileIcon(file),
-                path: path.join(requestPath, file)
+                path: path.join(normalizedPath, file)
             };
         }));
 
         res.render('files', {
             files: fileList,
-            currentPath: requestPath,
-            parentPath: path.dirname(requestPath)
+            currentPath: normalizedPath,
+            parentPath: parentPath,
+            isAuthenticated: req.isAuthenticated  // 使用中间件设置的认证状态
         });
-    } catch (error) {
-        console.error(error);
-        res.status(500).send(ApiResponse.error('服务器错误'));
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('服务器错误');
     }
 });
 
@@ -146,7 +166,38 @@ app.get('*', async (req, res) => {
 const config = toml.parse(fs.readFileSync('./public/conf/init.toml', 'utf-8'));
 const JWT_SECRET = require('crypto').randomBytes(64).toString('hex');
 
-// 验证密码的路由
+// 验证 JWT 的中间件
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json(ApiResponse.error('未授权', 401));
+
+    const token = authHeader.split(' ')[1];
+    try {
+        jwt.verify(token, JWT_SECRET);
+        next();
+    } catch (err) {
+        res.status(401).json(ApiResponse.error('令牌无效或已过期', 401));
+    }
+};
+
+// 排除验证的 API 路由列表
+const publicApis = [
+    '/verify-password',  // 密码验证
+    '/check-token',      // token 检查
+    '/file-details',      // 查看文件详情
+];
+
+// API 中间件 - 处理所有 /api 路由的认证
+app.use('/api', (req, res, next) => {
+    // 如果是公开 API 或文件详情 API，直接放行
+    if (publicApis.includes(req.path)) {
+        return next();
+    }
+    // 其他 API 需要验证 token
+    verifyToken(req, res, next);
+});
+
+// API 路由定义
 app.post('/api/verify-password', express.json(), (req, res) => {
     const { password } = req.body;
     
@@ -158,46 +209,17 @@ app.post('/api/verify-password', express.json(), (req, res) => {
     }
 });
 
-// 验证 JWT 的中间件
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: '未授权' });
-    
-    const token = authHeader.split(' ')[1];
-    try {
-        jwt.verify(token, JWT_SECRET);
-        next();
-    } catch (err) {
-        res.status(401).json({ error: '令牌无效或已过期' });
-    }
-};
-
-// 文件上传路由
-app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json(ApiResponse.error('没有文件', 400));
-    }
-    
-    try {
-        const originalName = req.file.originalname;
-        const targetPath = path.join(STATIC_DIR, originalName);
-        
-        await fsPromises.rename(req.file.path, targetPath);
-        res.json(ApiResponse.success(null, '上传成功'));
-    } catch (err) {
-        console.error(err);
-        res.status(500).json(ApiResponse.error('上传失败'));
-    }
+app.get('/api/check-token', (req, res) => {
+    res.json(ApiResponse.success(null, 'token有效'));
 });
 
-// 获取文件详细信息
 app.get('/api/file-details', async (req, res) => {
     try {
         // 确保路径以 / 开头，并规范化路径
         const requestPath = req.query.path || '';
         const normalizedPath = path.normalize(requestPath.startsWith('/') ? requestPath : '/' + requestPath);
         const filePath = path.join(STATIC_DIR, normalizedPath);
-        
+
         // 确保不能访问上级目录
         const realPath = path.resolve(filePath);
         if (!realPath.startsWith(path.resolve(STATIC_DIR))) {
@@ -208,9 +230,24 @@ app.get('/api/file-details', async (req, res) => {
             const stats = await fsPromises.stat(filePath);
             const data = {
                 name: path.basename(filePath),
+                path: path.dirname(normalizedPath),
                 size: formatSize(stats.size),
-                created: stats.birthtime.toLocaleString(),
-                modified: stats.mtime.toLocaleString()
+                created: stats.birthtime.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                }),
+                modified: stats.mtime.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                })
             };
             res.json(ApiResponse.success(data));
         } catch (err) {
@@ -222,8 +259,44 @@ app.get('/api/file-details', async (req, res) => {
     }
 });
 
-// 删除文件或文件夹
-app.post('/api/delete', verifyToken, express.json(), async (req, res) => {
+app.post('/api/upload', upload.array('files'), async (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json(ApiResponse.error('没有文件被上传', 400));
+    }
+
+    try {
+        const uploadPath = path.join(STATIC_DIR, req.body.path || '');
+        
+        // 确保上传路径在允许的目录内
+        const realPath = path.resolve(uploadPath);
+        if (!realPath.startsWith(path.resolve(STATIC_DIR))) {
+            return res.status(403).json(ApiResponse.error('非法上传路径', 403));
+        }
+
+        // 确保目标目录存在
+        await fsPromises.mkdir(uploadPath, { recursive: true });
+
+        for (const file of req.files) {
+            const targetPath = path.join(uploadPath, file.originalname);
+            await fsPromises.rename(file.path, targetPath);
+        }
+
+        res.json(ApiResponse.success(null, '上传成功'));
+    } catch (err) {
+        console.error('上传失败:', err);
+        // 清理临时文件
+        for (const file of req.files) {
+            try {
+                await fsPromises.unlink(file.path);
+            } catch (e) {
+                console.error('清理临时文件失败:', e);
+            }
+        }
+        res.status(500).json(ApiResponse.error('上传失败'));
+    }
+});
+
+app.post('/api/delete', express.json(), async (req, res) => {
     try {
         const targetPath = path.join(STATIC_DIR, req.body.path);
         
@@ -254,11 +327,6 @@ function formatSize(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
-
-// Token 检查路由
-app.get('/api/check-token', verifyToken, (req, res) => {
-    res.json(ApiResponse.success(null, 'token有效'));
-});
 
 const PORT = 3000;
 app.listen(PORT, () => {
