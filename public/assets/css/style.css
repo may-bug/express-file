@@ -1,0 +1,426 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: #f8f9fa;
+}
+
+a{
+    text-decoration: none;
+}
+
+.file-list {
+    list-style: none;
+    padding: 0;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.file-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
+}
+
+.file-item:last-child {
+    border-bottom: none;
+}
+
+.file-item:hover {
+    background-color: #f5f5f5;
+}
+
+.file-item a {
+    text-decoration: none;
+    color: #333;
+    display: flex;
+    align-items: center;
+}
+
+.file-icon {
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+}
+
+.breadcrumb {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.breadcrumb a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+/* 文件类型特定的颜色 */
+.file-icon.fab.fa-html5 { color: #e34c26; }
+.file-icon.fab.fa-css3-alt { color: #264de4; }
+.file-icon.fab.fa-js-square { color: #f0db4f; }
+.file-icon.fab.fa-java { color: #007396; }
+.file-icon.fab.fa-python { color: #3776ab; }
+
+/* 图片文件 */
+.file-icon.fa-image { color: #00c4cc; }
+.file-icon.fa-bezier-curve { color: #ff9a00; }
+
+/* 文档文件 */
+.file-icon.fa-file-word { color: #2b579a; }
+.file-icon.fa-file-excel { color: #217346; }
+.file-icon.fa-file-powerpoint { color: #d24726; }
+.file-icon.fa-file-pdf { color: #ff0000; }
+.file-icon.fa-file-alt { color: #666666; }
+.file-icon.fa-file-csv { color: #217346; }
+
+/* 媒体文件 */
+.file-icon.fa-music { color: #ff7597; }
+.file-icon.fa-video { color: #ff5000; }
+
+/* 文件夹 */
+.file-icon.fa-folder { color: #ffd700; }
+
+/* 默认文件图标 */
+.file-icon.fa-file-text { color: #666666; }
+
+.site-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.upload-btn {
+    position: fixed;
+    right: 20px;
+    top: 20px;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,123,255,0.2);
+}
+
+.upload-btn:hover {
+    background-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+}
+
+.upload-btn i {
+    font-size: 16px;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.modal-content {
+    position: relative;
+    background-color: #fff;
+    margin: 15vh auto;
+    padding: 30px;
+    width: 90%;
+    max-width: 400px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.close {
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.close:hover {
+    color: #333;
+}
+
+.password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.password-form input[type="password"] {
+    padding: 12px 15px;
+    border: 2px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.password-form input[type="password"]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+.password-form button {
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.password-form button:hover {
+    background-color: #0056b3;
+}
+
+.upload-form {
+    display: none;
+    margin-top: 20px;
+}
+
+.drop-zone {
+    min-height: 150px;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 25px;
+    text-align: center;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+}
+
+.drop-zone i {
+    color: #007bff;
+    margin-bottom: 10px;
+}
+
+.drop-zone p {
+    color: #666;
+    margin: 10px 0 0;
+}
+
+.upload-submit {
+    width: 100%;
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 15px;
+}
+
+.upload-submit:hover {
+    background-color: #0056b3;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    margin-top: 10px;
+    overflow: hidden;
+    display: none;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: #007bff;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.upload-list {
+    margin-top: 10px;
+}
+
+.upload-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.upload-item-name {
+    flex: 1;
+    margin-right: 10px;
+}
+
+.upload-item-progress {
+    width: 100px;
+    height: 6px;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.upload-item-progress-fill {
+    height: 100%;
+    background-color: #007bff;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+/* 右键菜单样式 */
+.context-menu {
+    display: none;
+    position: fixed;
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    padding: 5px 0;
+    z-index: 1000;
+}
+
+.context-menu-item {
+    padding: 8px 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.context-menu-item i {
+    margin-right: 8px;
+    width: 16px;
+}
+
+.context-menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background-color: #eee;
+    margin: 5px 0;
+}
+
+/* 确认删除对话框 */
+.confirm-dialog {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 2000;
+}
+
+.confirm-dialog-content {
+    position: relative;
+    background-color: #fff;
+    margin: 20vh auto;
+    padding: 20px;
+    width: 90%;
+    max-width: 400px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.confirm-dialog-buttons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.confirm-dialog-buttons button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.confirm-dialog-buttons .confirm {
+    background-color: #dc3545;
+    color: white;
+}
+
+.confirm-dialog-buttons .cancel {
+    background-color: #6c757d;
+    color: white;
+}
+
+#message-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    pointer-events: none;
+}
+
+.message {
+    padding: 12px 24px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    animation: messageSlideIn 0.3s ease;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    min-width: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message i {
+    margin-right: 8px;
+}
+
+.message-success {
+    background-color: #f0f9eb;
+    color: #67c23a;
+    border: 1px solid #c2e7b0;
+}
+
+.message-error {
+    background-color: #fef0f0;
+    color: #f56c6c;
+    border: 1px solid #fbc4c4;
+}
+
+.message-info {
+    background-color: #f4f4f5;
+    color: #909399;
+    border: 1px solid #d3d4d6;
+}
+
+@keyframes messageSlideIn {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+} 

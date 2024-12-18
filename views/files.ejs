@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TECGUI静态资源分发</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="/assets/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/assets/css/all.min.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+    <div id="message-container"></div>
+    <button class="upload-btn" onclick="showPasswordModal()">
+        <i class="fas fa-upload"></i> 上传文件
+    </button>
+    
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <form id="passwordForm" class="password-form">
+                <input type="password" id="password" placeholder="请输入上传密码" required>
+                <button type="submit">验证</button>
+            </form>
+            <form id="uploadForm" class="upload-form">
+                <div class="drop-zone">
+                    <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                    <p>拖拽文件到此处或点击选择文件</p>
+                    <input type="file" id="fileInput" multiple style="display: none">
+                </div>
+                <div class="upload-list"></div>
+                <button type="submit" class="upload-submit">开始上传</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="site-title">
+        TECGUI静态资源分发
+    </div>
+    <div class="breadcrumb">
+        <a href="/"><i class="fas fa-home"></i> 首页</a>
+        <% if (currentPath !== '/') { %>
+            / <a href="<%= parentPath %>">返回上级</a>
+        <% } %>
+    </div>
+    
+    <ul class="file-list">
+        <% files.sort((a, b) => {
+            if (a.isDirectory === b.isDirectory) {
+                return a.name.localeCompare(b.name);
+            }
+            return b.isDirectory - a.isDirectory;
+        }).forEach(function(file) { %>
+            <li class="file-item">
+                <a href="<%= file.path %>">
+                    <i class="<%= file.icon %> file-icon"></i>
+                    <%= file.name %>
+                </a>
+            </li>
+        <% }); %>
+    </ul>
+
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item copy-link">
+            <i class="fas fa-link"></i> 复制链接
+        </div>
+        <div class="context-menu-item view-details">
+            <i class="fas fa-info-circle"></i> 详细信息
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item delete-item" style="color: #dc3545">
+            <i class="fas fa-trash-alt"></i> 删除
+        </div>
+    </div>
+
+    <div id="confirmDialog" class="confirm-dialog">
+        <div class="confirm-dialog-content">
+            <h3>确认删除</h3>
+            <p>是否确定要删除 <span id="deleteFileName"></span>？</p>
+            <div class="confirm-dialog-buttons">
+                <button class="cancel">取消</button>
+                <button class="confirm">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('authToken') || '';
+        const dropZone = document.querySelector('.drop-zone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadList = document.querySelector('.upload-list');
+        
+        async function showPasswordModal() {
+            if (await checkToken()) {
+                document.getElementById('passwordForm').style.display = 'none';
+                document.getElementById('uploadForm').style.display = 'block';
+            }
+            document.getElementById('passwordModal').style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('passwordModal').style.display = 'none';
+        }
+        
+        document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/verify-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+                
+                handleApiResponse(response, (result) => {
+                    authToken = result.data.token;
+                    localStorage.setItem('authToken', authToken);
+                    document.getElementById('passwordForm').style.display = 'none';
+                    document.getElementById('uploadForm').style.display = 'block';
+                });
+            } catch (err) {
+                showMessage('网络请求失败', 'error');
+            }
+        });
+        
+        // 拖拽事件处理
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        // 点击上传区域触发文件选择
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', () => {
+            handleFiles(fileInput.files);
+        });
+        
+        function handleFiles(files) {
+            uploadList.innerHTML = '';
+            Array.from(files).forEach(file => {
+                const item = createUploadItem(file);
+                uploadList.appendChild(item);
+            });
+        }
+        
+        function createUploadItem(file) {
+            const item = document.createElement('div');
+            item.className = 'upload-item';
+            item.innerHTML = `
+                <div class="upload-item-name">${file.name}</div>
+                <div class="upload-item-progress">
+                    <div class="upload-item-progress-fill"></div>
+                </div>
+            `;
+            return item;
+        }
+        
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const items = uploadList.children;
+            
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const file = fileInput.files[i];
+                const progressBar = item.querySelector('.upload-item-progress-fill');
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && result.code === 0) {
+                        progressBar.style.width = '100%';
+                    } else {
+                        throw new Error(result.message);
+                    }
+                } catch (err) {
+                    item.style.color = 'red';
+                    alert(err.message || '上传失败');
+                }
+            }
+            
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        });
+
+        let currentContextItem = null;
+        const contextMenu = document.getElementById('contextMenu');
+        const confirmDialog = document.getElementById('confirmDialog');
+
+        // 为文件列表添加右键菜单
+        document.querySelectorAll('.file-item').forEach(item => {
+            item.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                currentContextItem = item;
+                
+                const isDirectory = item.querySelector('.fa-folder') !== null;
+                const copyLink = contextMenu.querySelector('.copy-link');
+                copyLink.style.display = isDirectory ? 'none' : 'flex';
+                
+                // 检查是否有删除权限
+                const deleteItem = contextMenu.querySelector('.delete-item');
+                deleteItem.style.display = authToken ? 'flex' : 'none';
+                
+                // 显示右键菜单
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = e.pageX + 'px';
+                contextMenu.style.top = e.pageY + 'px';
+            });
+        });
+
+        // 复制链接
+        contextMenu.querySelector('.copy-link').addEventListener('click', () => {
+            const fileName = currentContextItem.querySelector('a').textContent.trim();
+            const currentPath = window.location.href;
+            const baseUrl = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+            const fileUrl = baseUrl + fileName;
+            
+            navigator.clipboard.writeText(fileUrl).then(() => {
+                showMessage('链接已复制到剪贴板', 'success');
+            });
+            contextMenu.style.display = 'none';
+        });
+
+        // 查看详细信息
+        contextMenu.querySelector('.view-details').addEventListener('click', async () => {
+            try {
+                const fileName = currentContextItem.querySelector('a').textContent.trim();
+                const response = await fetch(`/api/file-details?path=/${encodeURIComponent(fileName)}`);
+                handleApiResponse(response, (result) => {
+                    const details = result.data;
+                    showMessage(`文件名：${details.name}\n大小：${details.size}\n创建时间：${details.created}\n修改时间：${details.modified}`, 'info');
+                });
+            } catch (err) {
+                showMessage('获取文件信息失败', 'error');
+            } finally {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        // 删除文件/文件夹
+        contextMenu.querySelector('.delete-item').addEventListener('click', () => {
+            if (!authToken) {
+                showMessage('请先验证密码', 'error');
+                contextMenu.style.display = 'none';
+                return;
+            }
+            
+            const fileName = currentContextItem.querySelector('a').textContent.trim();
+            document.getElementById('deleteFileName').textContent = fileName;
+            confirmDialog.style.display = 'block';
+            contextMenu.style.display = 'none';
+        });
+
+        // 确认删除
+        confirmDialog.querySelector('.confirm').addEventListener('click', async () => {
+            try {
+                const fileName = currentContextItem.querySelector('a').textContent.trim();
+                const response = await fetch('/api/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ path: fileName })
+                });
+                
+                handleApiResponse(response, () => {
+                    location.reload();
+                });
+            } catch (err) {
+                showMessage('删除失败', 'error');
+            } finally {
+                confirmDialog.style.display = 'none';
+            }
+        });
+
+        // 取消删除
+        confirmDialog.querySelector('.cancel').addEventListener('click', () => {
+            confirmDialog.style.display = 'none';
+        });
+
+        // 点击其他地方关闭右键菜单
+        document.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
+        });
+
+        // 阻止右键菜单冒泡
+        contextMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        async function checkToken() {
+            if (!authToken) return false;
+            
+            try {
+                const response = await fetch('/api/check-token', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    localStorage.removeItem('authToken');
+                    authToken = '';
+                    return false;
+                }
+                
+                return true;
+            } catch (err) {
+                localStorage.removeItem('authToken');
+                authToken = '';
+                return false;
+            }
+        }
+
+        // 添加消息提示函数
+        function showMessage(message, type = 'info') {
+            const container = document.getElementById('message-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${type}`;
+            
+            // 根据类型添加图标
+            const icon = document.createElement('i');
+            icon.className = type === 'success' ? 'fas fa-check-circle' :
+                            type === 'error' ? 'fas fa-times-circle' :
+                            'fas fa-info-circle';
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = message;
+            
+            messageDiv.appendChild(icon);
+            messageDiv.appendChild(textSpan);
+            container.appendChild(messageDiv);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                messageDiv.style.transition = 'opacity 0.3s';
+                setTimeout(() => {
+                    container.removeChild(messageDiv);
+                }, 300);
+            }, 3000);
+        }
+
+        // 处理API响应的辅助函数
+        function handleApiResponse(response, successCallback) {
+            response.json().then(result => {
+                if (response.ok && result.code === 0) {
+                    showMessage(result.message || '操作成功', 'success');
+                    if (successCallback) successCallback(result);
+                } else {
+                    showMessage(result.message || '操作失败', 'error');
+                }
+            }).catch(err => {
+                showMessage('服务器响应错误', 'error');
+            });
+        }
+    </script>
+</body>
+</html>
